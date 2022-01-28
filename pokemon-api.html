@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://unpkg.com/react@17.0.2/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17.0.2/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.16.7/babel.min.js"></script>
+    <link rel="stylesheet" href="pokemon.css" />
+    <title>Document</title>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const root = document.querySelector('#root');
+
+      async function fetchPokemon(pokemonName) {
+        const pokemonQuery = `
+                query PokemonInfo($name: String) {
+                  pokemon(name: $name) {
+                    id
+                    number
+                    name
+                    image
+                    attacks {
+                      special {
+                        name
+                        type
+                        damage
+                      }
+                    }
+                  }
+                }
+              `;
+
+        const response = await fetch('https://graphql-pokemon2.vercel.app/', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json;charset=UTF-8',
+          },
+          body: JSON.stringify({
+            query: pokemonQuery,
+            variables: { name: pokemonName.toLowerCase() },
+          }),
+        });
+
+        const { data } = await response.json();
+        const pokemon = data?.pokemon;
+
+        if (pokemon) {
+          return pokemon;
+        } else {
+          throw new Error(`No pokemon with the name "${pokemonName}"`);
+        }
+      }
+
+      class App extends React.Component {
+        state = {
+          pokemonName: '',
+        };
+
+        handleSubmit(newPokemonName) {
+          this.setState({ pokemonName: newPokemonName });
+        }
+
+        render() {
+          const { pokemonName } = this.state;
+          return (
+            <div>
+              <PokemonForm onSubmit={this.handleSubmit.bind(this)} />
+              <div>
+                <ErrorBoundary FallbackComponent={PokemonErrorView} key={pokemonName}>
+                  <PokemonDataView pokemonName={pokemonName} />
+                </ErrorBoundary>
+              </div>
+            </div>
+          );
+        }
+      }
+
+      class ErrorBoundary extends React.Component {
+        state = {
+          error: null,
+        };
+
+        static getDerivedStateFromError(error) {
+          return { error };
+        }
+
+        render() {
+          const { error } = this.state;
+          const { FallbackComponent, children } = this.props;
+
+          if (error) {
+            return <FallbackComponent error={error} />;
+          }
+
+          return children;
+        }
+      }
+
+      class PokemonForm extends React.Component {
+        state = {
+          pokemonName: '',
+        };
+
+        handleSubmit(e) {
+          e.preventDefault();
+          this.props.onSubmit(this.state.pokemonName);
+        }
+
+        handleSelect(pokemonName) {
+          this.setState({ pokemonName });
+          this.props.onSubmit(pokemonName);
+        }
+
+        render() {
+          return (
+            <form onSubmit={this.handleSubmit.bind(this)}>
+              <input
+                className="input-search"
+                type="text"
+                onChange={e => this.setState({ pokemonName: e.target.value })}
+                value={this.state.pokemonName}
+                placeholder="Which pokemon?"
+              />
+              <button
+                className="btn-fetch"
+                type="submit"
+                disabled={this.state.pokemonName.length === 0}
+              >
+                Fetch!
+              </button>
+              <div className="btn-pokemon">
+                Out of ideas? Try{' '}
+                <button
+                  className="invisible-button"
+                  type="button"
+                  onClick={() => this.handleSelect('pikachu')}
+                >
+                  Pikachu
+                </button>
+                {', '}
+                <button
+                  className="invisible-button"
+                  type="button"
+                  onClick={() => this.handleSelect('charizard')}
+                >
+                  Charizard
+                </button>
+                {', or'}
+                <button
+                  className="invisible-button"
+                  type="button"
+                  onClick={() => this.handleSelect('ninetales')}
+                >
+                  Ninetales
+                </button>
+                .
+              </div>
+            </form>
+          );
+        }
+      }
+
+      class PokemonDataView extends React.Component {
+        constructor(props) {
+          super(props);
+          this.state = {
+            pokemon: null,
+            status: this.props.pokemonName ? 'pending' : 'idle',
+            error: null,
+          };
+        }
+
+        componentDidMount() {
+          if (this.props.pokemonName) {
+            this._fetchPokemon();
+          }
+        }
+
+        componentDidUpdate(oldProps, oldState) {
+          if (this.props.pokemonName && oldProps.pokemonName !== this.props.pokemonName) {
+            this._fetchPokemon();
+          }
+        }
+
+        _fetchPokemon() {
+          this.setState({ status: 'pending' });
+          fetchPokemon(this.props.pokemonName).then(
+            pokemon => {
+              this.setState({ pokemon, status: 'resolved' });
+            },
+            error => {
+              console.log('FAILURE', error);
+              this.setState({ error, status: 'rejected' });
+            },
+          );
+        }
+
+        render() {
+          const { pokemonName } = this.props;
+          const { pokemon, status, error } = this.state;
+
+          const attacks = pokemon ? pokemon.attacks.special : [];
+
+          if (error) {
+            // this will be handled by ErrorBoundary.
+            throw error;
+          }
+
+          return (
+            <div className="pokemon-wrapper">
+              <h2 className="pokemon-name">
+                {status === 'idle'
+                  ? 'No pokemon Yet! (xxx)'
+                  : status === 'pending'
+                  ? `Loading ${pokemonName}`
+                  : `${pokemon.name} (${pokemon.number})`}
+              </h2>{' '}
+              <div className="pokemon-avatar">
+                {status === 'idle' ? (
+                  'Please submit a pokemon!'
+                ) : status === 'pending' ? (
+                  <div class="loader"></div>
+                ) : (
+                  <img src={pokemon.image} />
+                )}
+              </div>
+              <div className="pokemon-stats">
+                <table>
+                  <thead>
+                    <tr>
+                      <th className="pokemon-stats-title">Ability</th>
+                      <th className="pokemon-stats-title">Type</th>
+                      <th className="pokemon-stats-title">Damage</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {status === 'resolved' ? (
+                      attacks.map(attack => (
+                        <tr key={attack.name}>
+                          <td className="pokemon-stats">{attack.name}</td>
+                          <td className="pokemon-stats">{attack.type}</td>
+                          <td className="pokemon-stats">{attack.damage}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td className="pokemon-stats">-</td>
+                        <td className="pokemon-stats">-</td>
+                        <td className="pokemon-stats">-</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>{' '}
+            </div>
+          );
+        }
+      }
+
+      function PokemonErrorView({ error }) {
+        return (
+          <div className="pokemon-wrapper-error">
+            <h1 className="pokemon-name-error">Error! :( (xxx)</h1>
+            <div className="pokemon-avatar-error">
+              {error.message}
+              <button className="btn-error">Try again</button>
+            </div>
+            <div class="pokemon-stats">
+              <table>
+                <thead>
+                  <tr>
+                    <th className="pokemon-stats-title-error">Ability</th>
+                    <th className="pokemon-stats-title-error">Type</th>
+                    <th className="pokemon-stats-title-error">Damage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="pokemon-stats-error">-</td>
+                    <td className="pokemon-stats-error">-</td>
+                    <td className="pokemon-stats-error">-</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.render(<App />, root);
+    </script>
+  </body>
+</html>
