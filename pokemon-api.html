@@ -18,22 +18,22 @@
 
       async function fetchPokemon(pokemonName) {
         const pokemonQuery = `
-                query PokemonInfo($name: String) {
-                  pokemon(name: $name) {
-                    id
-                    number
-                    name
-                    image
-                    attacks {
-                      special {
-                        name
-                        type
-                        damage
+                  query PokemonInfo($name: String) {
+                    pokemon(name: $name) {
+                      id
+                      number
+                      name
+                      image
+                      attacks {
+                        special {
+                          name
+                          type
+                          damage
+                        }
                       }
                     }
                   }
-                }
-              `;
+                `;
 
         const response = await fetch('https://graphql-pokemon2.vercel.app/', {
           method: 'POST',
@@ -65,13 +65,24 @@
           this.setState({ pokemonName: newPokemonName });
         }
 
+        handleReset() {
+          this.setState({ pokemonName: '' });
+        }
+
         render() {
           const { pokemonName } = this.state;
           return (
             <div>
-              <PokemonForm onSubmit={this.handleSubmit.bind(this)} />
+              <PokemonForm
+                onSubmit={this.handleSubmit.bind(this)}
+                pokemonName={pokemonName}
+              />{' '}
               <div>
-                <ErrorBoundary FallbackComponent={PokemonErrorView} key={pokemonName}>
+                <ErrorBoundary
+                  FallbackComponent={PokemonErrorView}
+                  key={pokemonName}
+                  onReset={this.handleReset.bind(this)}
+                >
                   <PokemonDataView pokemonName={pokemonName} />
                 </ErrorBoundary>
               </div>
@@ -91,10 +102,10 @@
 
         render() {
           const { error } = this.state;
-          const { FallbackComponent, children } = this.props;
+          const { FallbackComponent, children, onReset } = this.props;
 
           if (error) {
-            return <FallbackComponent error={error} />;
+            return <FallbackComponent error={error} onReset={onReset} />;
           }
 
           return children;
@@ -114,6 +125,12 @@
         handleSelect(pokemonName) {
           this.setState({ pokemonName });
           this.props.onSubmit(pokemonName);
+        }
+
+        componentDidUpdate(oldProps, oldState) {
+          if (oldProps.pokemonName !== this.props.pokemonName) {
+            this.setState({ pokemonName: this.props.pokemonName });
+          }
         }
 
         render() {
@@ -211,87 +228,97 @@
             throw error;
           }
 
-          return (
-            <div className="pokemon-wrapper">
-              <h2 className="pokemon-name">
-                {status === 'idle'
-                  ? 'No pokemon Yet! (xxx)'
-                  : status === 'pending'
-                  ? `Loading ${pokemonName}`
-                  : `${pokemon.name} (${pokemon.number})`}
-              </h2>{' '}
-              <div className="pokemon-avatar">
-                {status === 'idle' ? (
-                  'Please submit a pokemon!'
-                ) : status === 'pending' ? (
-                  <div class="loader"></div>
-                ) : (
-                  <img src={pokemon.image} />
-                )}
-              </div>
-              <div className="pokemon-stats">
-                <table>
-                  <thead>
-                    <tr>
-                      <th className="pokemon-stats-title">Ability</th>
-                      <th className="pokemon-stats-title">Type</th>
-                      <th className="pokemon-stats-title">Damage</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {status === 'resolved' ? (
-                      attacks.map(attack => (
-                        <tr key={attack.name}>
-                          <td className="pokemon-stats">{attack.name}</td>
-                          <td className="pokemon-stats">{attack.type}</td>
-                          <td className="pokemon-stats">{attack.damage}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td className="pokemon-stats">-</td>
-                        <td className="pokemon-stats">-</td>
-                        <td className="pokemon-stats">-</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>{' '}
-            </div>
-          );
+          const name =
+            status === 'idle'
+              ? 'No pokemon Yet! (xxx)'
+              : status === 'pending'
+              ? `Loading ${pokemonName}`
+              : `${pokemon.name} (${pokemon.number})`;
+
+          const avatar =
+            status === 'idle' ? (
+              'Please submit a pokemon!'
+            ) : status === 'pending' ? (
+              <div class="loader"></div>
+            ) : (
+              <img src={pokemon.image} />
+            );
+
+          const rows =
+            status === 'resolved' ? (
+              attacks.map(attack => (
+                <tr key={attack.name}>
+                  <td className="pokemon-stats">{attack.name}</td>
+                  <td className="pokemon-stats">{attack.type}</td>
+                  <td className="pokemon-stats">{attack.damage}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td className="pokemon-stats">-</td>
+                <td className="pokemon-stats">-</td>
+                <td className="pokemon-stats">-</td>
+              </tr>
+            );
+
+          return <CardView name={name} avatar={avatar} rows={rows} />;
         }
       }
 
-      function PokemonErrorView({ error }) {
+      function CardView({ name, avatar, rows, isError }) {
+        let normalClassName = 'pokemon-wrapper';
+        let errorClassName = 'pokemon-wrapper-error';
+        let className = isError ? errorClassName : normalClassName;
+
         return (
-          <div className="pokemon-wrapper-error">
-            <h1 className="pokemon-name-error">Error! :( (xxx)</h1>
-            <div className="pokemon-avatar-error">
-              {error.message}
-              <button className="btn-error">Try again</button>
-            </div>
+          <div className={`pokemon-wrapper${isError ? '-error' : ''}`}>
+            <h1 className={`pokemon-name${isError ? '-error' : ''}`}>{name}</h1>
+            <div className={`pokemon-avatar${isError ? '-error' : ''}`}>{avatar}</div>
             <div class="pokemon-stats">
               <table>
                 <thead>
                   <tr>
-                    <th className="pokemon-stats-title-error">Ability</th>
-                    <th className="pokemon-stats-title-error">Type</th>
-                    <th className="pokemon-stats-title-error">Damage</th>
+                    <th className={`pokemon-stats-title${isError ? '-error' : ''}`}>
+                      Ability
+                    </th>
+                    <th className={`pokemon-stats-title${isError ? '-error' : ''}`}>
+                      Type
+                    </th>
+                    <th className={`pokemon-stats-title${isError ? '-error' : ''}`}>
+                      Damage
+                    </th>
                   </tr>
                 </thead>
-                <tbody>
-                  <tr>
-                    <td className="pokemon-stats-error">-</td>
-                    <td className="pokemon-stats-error">-</td>
-                    <td className="pokemon-stats-error">-</td>
-                  </tr>
-                </tbody>
+                <tbody>{rows}</tbody>
               </table>
             </div>
           </div>
         );
       }
 
+      function PokemonErrorView({ error, onReset }) {
+        return (
+          <CardView
+            name="Error! :( (xxx)"
+            avatar={
+              <>
+                {error.message}
+                <button className="btn-error" onClick={onReset}>
+                  Try again
+                </button>{' '}
+              </>
+            }
+            rows={
+              <tr>
+                <td className="pokemon-stats-error">-</td>{' '}
+                <td className="pokemon-stats-error">-</td>
+                <td className="pokemon-stats-error">-</td>
+              </tr>
+            }
+            isError
+          />
+        );
+      }
       ReactDOM.render(<App />, root);
     </script>
   </body>
